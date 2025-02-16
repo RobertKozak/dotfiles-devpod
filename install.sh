@@ -10,4 +10,6 @@ ln -sf "$PWD/direnv" "$XDG_CONFIG_HOME/direnv/"
 ln -sf "$PWD/.*" "$HOME/"
 ln -sf "$PWD/starship.toml" "$XDG_CONFIG_HOME/startship.toml"
 
-curl -sS https://starship.rs/install.sh | sh
+curl -sS https://starship.rs/install.sh -o install-starship.install-starship
+
+./install-starship.sh --yes
