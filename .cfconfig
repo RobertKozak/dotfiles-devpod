@@ -1,0 +1,23 @@
+contexts:
+  cf-runner:
+    type: APIKey
+    name: cf-runner
+    url: 'https://g.codefresh.io'
+    token: 602d95c061205e241633c864.7849ee8a23b6f24709ae965c14616ced
+    beta: false
+    onPrem: false
+  codefresh:
+    type: APIKey
+    name: codefresh
+    url: 'https://g.codefresh.io'
+    token: 62f3dfbaa749560817dc2b7d.cbb7262714530e1bf64fbfa190df5a4f
+    beta: false
+    onPrem: false
+  codefresh2:
+    type: APIKey
+    name: codefresh2
+    url: 'https://g.codefresh.io'
+    token: 61b8a2049cab7259729c145b.8595f89567ef0c8919af89b8edc38548
+    beta: false
+    onPrem: false
+current-context: codefresh

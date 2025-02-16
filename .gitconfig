@@ -1,0 +1,15 @@
+[credential]
+	helper = 
+	helper = /usr/local/share/gcm-core/git-credential-manager
+[credential "https://dev.azure.com"]
+	useHttpPath = true
+[user]
+	name = Robert Kozak
+	email = rkozak@gmail.com
+	signingkey = /Users/rkozak/.ssh/fullsteam-commit-signing.pub
+[gpg]
+	format = ssh
+[gpg "ssh"]
+	allowedsignersfile = /Users/rkozak/.ssh/allowed_signers
+[commit]
+	gpgsign = false

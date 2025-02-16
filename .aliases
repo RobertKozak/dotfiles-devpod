@@ -1,0 +1,600 @@
+#-----------------------------------------------
+# Terraform Aliases
+
+alias tfi='terraform init'
+alias tfp='terraform plan -out plan'
+alias tfa='terraform apply plan'
+alias tfx='tfi && tfp && tfa'
+alias tfd='terraform apply -destroy -auto-approve'
+
+#-----------------------------------------------
+# Git Aliases
+
+gt() {
+ git tag --list -n1
+}
+
+gp(){
+  git add .
+  git commit -m "$@"
+  git push
+}
+
+checkout(){
+  git branch | grep "SO-$1"
+  if [[ $? != 0 ]] 
+  then
+    git checkout -b "SO-$1"
+  else
+    git checkout "SO-$1"
+  fi
+}
+
+checkin(){
+  BRANCH=$(git branch --show-current)
+  git add .
+  git commit -m "$BRANCH - $1"
+  
+  DIFF=$(git diff HEAD^)
+  # gh copilot explain $DIFF | pbcopy 
+
+  git push --set-upstream origin "$BRANCH"
+  git checkout "$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')"
+}
+
+updateRepos() {
+  REPOS_DIR=$(readlink -f "$(pwd)")
+  echo "Updating repos in ${REPOS_DIR}"  
+  
+  for repo in $(find "${REPOS_DIR}" -maxdepth 1 -type d ! -name "$(basename "${REPOS_DIR}")"); do 
+    echo -e "\nUpdating: ${repo}\n"  
+    cd "${repo}" || exit
+    gclean
+    git pull --prune 
+    cd ..
+    echo "-----------------------------------------------------------"
+  done
+}
+
+listBranches() {
+  REPOS_DIR=$(readlink -f "$(pwd)")
+  echo "Updating repos in ${REPOS_DIR}"  
+  
+  for repo in $(find "${REPOS_DIR}" -maxdepth 1 -type d ! -name "$(basename "${REPOS_DIR}")"); do 
+    echo -e "\nUpdating: ${repo}\n"  
+    cd "${repo}" || exit
+    git branch -l
+    cd ..
+    echo "-----------------------------------------------------------"
+  done
+}
+
+# Fuzzy search Git branches in a repo
+# Looks for local and remote branches
+function fsb() {
+    local pattern=$*
+        local branches branch
+        branches=$(git branch --all | awk 'tolower($0) ~ /'"$pattern"'/') &&
+        branch=$(echo "$branches" |
+                fzf-tmux -p --reverse -1 -0 +m) &&
+        if [ "$branch" = "" ]; then
+            echo "[$0] No branch matches the provided pattern"; return;
+    fi;
+    git checkout "$(echo "$branch" | sed "s/.* //" | sed "s#remotes/[^/]*/##")"
+}
+
+function fshow() {
+  git log --graph --color=always \
+      --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" |
+  fzf --ansi --no-sort --reverse --tiebreak=index --bind=ctrl-s:toggle-sort --preview \
+         'f() { set -- $(echo -- "$@" | grep -o "[a-f0-9]\{7\}"); [ $# -eq 0 ] || git show --color=always $1 ; }; f {}' \
+      --header "enter to view, ctrl-o to checkout" \
+      --bind "q:abort,ctrl-f:preview-page-down,ctrl-b:preview-page-up" \
+      --bind "ctrl-o:become:(echo {} | grep -o '[a-f0-9]\{7\}' | head -1 | xargs git checkout)" \
+      --bind "ctrl-m:execute:
+                (grep -o '[a-f0-9]\{7\}' | head -1 |
+                xargs -I % sh -c 'git show --color=always % | less -R') << 'FZF-EOF'
+                {}
+FZF-EOF" --preview-window=right:60%
+}
+
+# git checkout main/master
+gmain(){
+  git checkout $(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+}
+
+# clean local branches
+gclean() {
+  MAIN=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+  git branch -d $(git branch --merged="${MAIN}" | grep -v "${MAIN}") 2>/dev/null
+}
+
+githubid()
+{
+  gh api -X GET search/commits -f q="author-email:$1" -H 'Accept: application/vnd.github.cloak-preview'  | jq -r '.items[0].author.login'
+}
+
+#-----------------------------------------------
+# Ansible Aliases
+ 
+alias ap='ansible-playbook -b --vault-password-file ~/vault-password'
+alias aa='ansible -b --vault-password-file ~/vault-password'
+alias avv='ansible-vault view --vault-password-file ~/vault-password'
+alias ave='ansible-vault edit --vault-password-file ~/vault-password'
+alias avc='ansible-vault create --vault-password-file ~/vault-password'
+
+#-----------------------------------------------
+# kubernetes Aliases
+
+# make kubectl to kubecolor
+command -v kubecolor >/dev/null 2>&1 && alias kubectl="$(which kubecolor)"
+kall(){
+  #!/bin/bash
+  
+  for cluster in $(kubectl config get-contexts -o name); do
+    kubectl config use-context "${cluster}"
+    kubectl "${@}"
+    echo ""
+  done
+}
+
+kallns() {
+  #!/bin/bash
+
+  for cluster in $(kubectl config get-contexts -o name); do
+    kubectl config use-context "${cluster}"
+    for namespace in $(kubectl get ns --no-headers | cut -d' ' -f1);  do
+      kubectl  "$@" -n "${namespace}"
+    done
+  done
+}
+
+kc() {
+  #!/bin/bash
+
+  if [[ "$*" == "" ]]
+  then
+    kubectl  config get-contexts
+  else
+    kubectl config use-context "${@}"
+  fi
+}
+
+kns(){
+  #!/bin/bash
+
+  if [[ -z "$1" ]]
+  then
+    kubectl  get ns
+  else
+    kubectl config set-context "$(kubectl config current-context)" --namespace="$1"
+  fi
+}
+
+kexec(){
+  #!/bin/bash
+
+  POD=${1}
+  CMD=${2:-/bin/sh}
+  CONTAINER=${3}
+
+  if [[ -z "$CONTAINER" ]]; then
+    kubectl exec -it "$POD" -- "$CMD"
+  else
+    kubectl exec -it "$POD" -c "$CONTAINER" -- "$CMD"
+  fi
+}
+
+kssh() {
+  #!/bin/bash
+
+  [[ -z $1 ]] && echo "Kubernetes node name is required." && kubectl get nodes && echo "" && return
+
+  # set variables
+  node=${1}
+  nodeName=$(kubectl get node "${node}" -o template --template='{{index .metadata.labels "kubernetes.io/hostname"}}')
+  nodeSelector='"nodeSelector": { "kubernetes.io/hostname": "'${nodeName:?}'" },'
+  podName="ssh"-${USER}-$(echo "${node}" | cut -d'.' -f1 |cut -d'-' -f2-)
+  currentNamespace=$(kubectl config get-contexts | grep "$(kubectl config current-context)" | awk \{'print $5'\})
+
+  # change to kube-system namespace
+  kubectl config set-context "$(kubectl config current-context)" --namespace=kube-system
+
+  # run nsenter to get full host ssh-like session
+  kubectl run "${podName:?}" --restart=Never -it --rm --env="POD_NAMESPACE=kube-system" --image overriden --overrides '
+  {
+    "spec": {
+      "hostPID": true,
+      "hostNetwork": true,
+      '"${nodeSelector?}"'
+      "tolerations": [{
+          "operator": "Exists"
+      }],
+      "containers": [
+        {
+          "name": "nsenter",
+          "image": "alexeiled/nsenter",
+          "command": [
+            "/nsenter", "--all", "--target=1", "--", "su", "-"
+          ],
+          "stdin": true,
+          "tty": true,
+          "securityContext": {
+            "privileged": true
+          }
+        }
+      ]
+    }
+  }' --attach "$@"
+
+  # Restore previous namespace.
+  kubectl config set-context "$(kubectl config current-context)" --namespace="${currentNamespace}"
+}
+
+alias k=kubectl
+
+kallpods() {
+  kubectl get pods --all-namespaces "$@" -o=wide
+}
+
+kapply() {
+  kubectl apply "$@"
+}
+
+kdel() {
+  kubectl delete "$@"
+}
+
+kdesc() {
+  kubectl describe "$@"
+}
+
+kget() {
+  kubectl get "$@"
+}
+
+knodes(){
+  kubectl get nodes $@
+}
+
+kpods() {
+# if args contain a - then include in command other wise use args as input to grep
+  if [[ "$@" =~ ^- ]] | [[ $# == 0 ]]; then
+    kubectl get pods -o wide $@
+  else
+    kubectl get pods -o wide | grep $@
+  fi
+}
+
+kprops() {
+  kubectl get secret "$1-props" -o "go-template={{index .data \"$1.properties\"}}" | base64 --decode
+}
+
+krestart() {
+  kubectl rollout restart "$@"; kubectl rollout status "$@"
+}
+
+kw() {
+    watch --color "unbuffer kubecolor $@"
+}
+
+alias vc="vcluster"
+#-----------------------------------------------
+# tmux Aliases
+
+start() {
+  if [[ $(tmux has-session -t "$1" 2>/dev/null) != 0 ]]; then
+      tmux new-session -d -s "$1"
+  fi
+
+  if [[ $(tmux has-session -t "$1" 2>/dev/null) == 0 ]]; then
+      SESSION_NOT_ATTACHED=$(tmux list-sessions -F "#{session_name}:#{session_attached}" | grep -m 1 "$1" | cut -d':' -f2)
+      if [[ $SESSION_NOT_ATTACHED == 0 && -z $TMUX ]]; then
+          tmux attach-session -t "$1" >/dev/null 2>&1
+      else
+          tmux switch -t "$1" >/dev/null 2>&1
+      fi
+  fi
+}
+
+tls(){
+    LAST_TMUX_SESSION=$(tmux list-sessions 2>/dev/null | awk -F ":" '{print$1}' | tail -n1);
+    [[ -z "$LAST_TMUX_SESSION" ]] && tmux new-session || tmux attach -t "$LAST_TMUX_SESSION"
+}
+
+k8s() {
+	local session_name="k8s"
+	local main_window_name="$1"
+	local kubeconfig_path="$HOME/.kube/$main_window_name-eks.conf"
+	local common_cmd="export KUBECONFIG=$kubeconfig_path; kc $main_window_name >/dev/null; clear"
+	local temp_dir="/private/tmp/tmux-501/"
+	local tmux_socket="$temp_dir/default" # Define the custom socket path
+
+	# Helper function to set up tmux panes
+  setup_windows() {
+      # Assuming the main window is already selected, first split horizontally for the main and secondary areas
+      tmux -S "$tmux_socket" split-window -h -t "${session_name}:${main_window_name}"
+      tmux -S "$tmux_socket" select-pane -t 1
+
+      # After the horizontal split, tmux automatically focuses on the new pane to the right
+      # Now, split the right pane vertically to create the stacked layout
+      tmux -S "$tmux_socket" split-window -v -t "${session_name}:${main_window_name}.1"
+      # At this point, you have three panes: a main one on the left and two stacked on the right
+
+      # Send the initial command to the main pane (the left-most pane)
+      tmux -S "$tmux_socket" send-keys -t "${session_name}:${main_window_name}.0" "$common_cmd" C-m
+
+      # Send a command to the top-right pane (this will be pane .1 if no other panes were created beforehand)
+      tmux -S "$tmux_socket" send-keys -t "${session_name}:${main_window_name}.1" "$common_cmd; watch 'kallpods | grep \"0/\"'" C-m
+
+      # Send a command to the bottom-right pane (this will be pane .2 after the vertical split)
+      tmux -S "$tmux_socket" send-keys -t "${session_name}:${main_window_name}.2" "$common_cmd; watch knodes" C-m
+  
+      tmux select-pane -t 0
+      tmux resize-pane -Z 
+  }
+
+	# Check if the session exists
+	if tmux -S "$tmux_socket" has-session -t $session_name 2>/dev/null; then
+		if [ -z "$main_window_name" ]; then
+			echo "Please provide a name for the window."
+			return 1
+		fi
+
+		# Attach to the session if it exists and the main window name is provided
+		if [ -z "$TMUX" ]; then
+			echo "Attaching to existing session $session_name."
+			tmux -S "$tmux_socket" attach-session -t $session_name
+		elif ! tmux -S "$tmux_socket" list-windows -t $session_name | grep -q "$main_window_name"; then
+			echo "Creating new session $session_name."
+			tmux -S "$tmux_socket" new-window -t "$session_name" -n "$main_window_name"
+			setup_windows
+			tmux -S "$tmux_socket" select-window -t "$session_name:$main_window_name"
+		fi
+	else
+		if [ -z "$main_window_name" ]; then
+			echo "Please provide a name for the window."
+			return 1
+		fi
+
+		# Create a new session and window, then setup panes
+		tmux -S "$tmux_socket" new-session -d -s "$session_name" -n "$main_window_name"
+		setup_windows
+		# Attach to the new session
+		tmux -S "$tmux_socket" attach-session -t "$session_name"
+	fi
+}
+
+tk8s() {
+	if [[ -n "$TMUX" ]]; then
+		echo "Sorry, tk8s can only be run from outside of Tmux. Use k8s <cluster-name> instead."
+	else
+		local session_name="k8s"
+		local kube_contexts
+		kube_contexts=$(kubectl config get-contexts -oname | grep "${1:-.}")
+		echo -e "Setting up TMUX for: \n"
+
+		# Define the custom tmux socket path
+		local temp_dir="/private/tmp/tmux-501/"
+		local tmux_socket="$temp_dir/default"
+    mkdir -p /$temp_dir
+
+		# Check if the session exists, and create it if it doesn't, using the custom socket path
+		if ! tmux -S "$tmux_socket" has-session -t $session_name 2>/dev/null; then
+			tmux -S "$tmux_socket" new-session -d -s $session_name -n temp
+		fi
+
+		# Loop through each Kubernetes context and call the k8s function for each, using the custom socket path
+		while IFS= read -r context; do
+			echo "$context"
+			tmux -S "$tmux_socket" send-keys -t $session_name "source $HOME/.aliases; k8s $context; clear" C-m
+
+			# Add a small delay to allow the command to be processed
+			sleep 0.5
+		done <<<"$kube_contexts"
+
+		tmux -S "$tmux_socket" select-window -t 1
+		tmux -S "$tmux_socket" kill-window -t 1
+		tmux -S "$tmux_socket" select-window -t 1
+
+		# Attach to the session if not already inside a tmux session, using the custom socket path
+		[ -z "$TMUX" ] && tmux -S "$tmux_socket" attach-session -t $session_name
+	fi
+}
+
+k8s-clean() {
+  k get pods | grep "Error" | awk '{print $1}' | xargs kdel pod
+  k get pods | grep "Unknown" | awk '{print $1}' | xargs kdel pod
+  k get pods | grep "OOM" | awk '{print $1}' | xargs kdel pod
+}
+#-----------------------------------------------
+# Misc Aliases
+
+alias repos='cd $HOME/repos'
+alias cr='cd $HOME/repos/Chrome-River'
+alias gkc='cd $HOME/repos/emburse/kubernetes-cluster'
+alias emburse='cd $HOME/repos/emburse'
+alias actions='cd $HOME/repos/emburse/actions'
+
+
+# `refresh cmd` executes clears the terminal and prints
+# the output of `cmd` in it.
+function refresh {
+  tput clear || exit 2 # Clear screen. Almost same as echo -en '\033[2J';
+  bash -ic "$*"
+}
+
+# Like watch, but with color
+function cwatch {
+  watch --color "unbuffer $@" 
+}
+
+function _encode() {
+  echo "$1" | base64
+}
+
+function _decode() {
+  echo "$1" | base64 -d
+}
+
+alias login='aws sso login --sso-session fs-platform-operations-snd'
+alias history="history -i 0"
+
+ls() 
+{ 
+  lsd -Gghl --group-directories-first "$@"
+}
+
+lsl() 
+{
+  lsd -hAl --icon auto "$@"
+}
+
+lst() 
+{ 
+  lsd -hA -I **/.git --tree --icon auto "$@"
+}
+
+tree() 
+{ 
+  lsd -h --tree --depth 4 --icon auto "$@"
+}
+
+encode() 
+{ 
+  _encode "$1" 
+}
+
+decode() 
+{
+  _decode "$1" 
+}
+
+alias htop='btm'
+alias nano='nvim'
+alias vi='nvim'
+alias vim='nvim'
+
+fh() {
+  eval "$( ([[ -n "${ZSH_NAME}" ]] && fc -l 1 || history) | fzf +s --tac | sed 's/ *[0-9]* *//')"
+}
+
+fd() {
+  local dir
+  dir=$(find "${1:-.}" -path '*/\.*' -prune -o -type d -print 2> /dev/null | fzf +m)
+  cd "${dir}" || exit
+}
+
+_ssh() {
+  command ssh "$@" -t -- /bin/bash -c 'tmux has-session && exec tmux attach || exec tmux'
+}
+
+alias cd..='cd ..'
+alias cd...='cd ../..'
+
+alias http=hx
+alias s='source $HOME/.zshrc'
+alias rm=trash
+alias jj='pbpaste | jasonpp | pbcopy'
+alias jjj='pbpaste | jasonpp' 
+alias serve='python3 -m http.server'
+alias tma='tmux attach'
+
+alias polaris='open http://localhost:8080 && polaris dashboard --port 8080 --config $HOME/.config/polaris/config.yml'
+
+replaceTag(){
+  echo "Replacing tag $1"
+
+  git tag -d $1
+  git push origin :refs/tags/$1
+
+  git tag -fa $1 -m "$2"
+  git push origin --tags
+}
+
+showArtifacts(){
+  docker export $(docker create $1) | tar -t | grep artifact
+}
+
+# alias docker=podman
+
+mkdir() {
+  /bin/mkdir -p ${1}
+  cd ${1}
+}
+
+get-params()
+{
+  # usage:
+  # get-param <ssm paramater> [<profile>] [-- commands]
+  # <profile> defaults to env var AWS_PROFILE
+  #
+  KEY=${1}
+  VALUE=${1##*/}
+  shift
+
+  # Store all arguments in an array
+  args=("$@")
+
+  # Find the index of the '--' separator
+  separator_index=-1
+  for i in "${!args[@]}"; do
+    if [[ "${args[$i]}" == "--" ]]; then
+      separator_index=$i
+      break
+    fi
+  done
+
+  # If the '--' separator is found
+  if [[ $separator_index -ge 0 ]]; then
+    # Extract the arguments before the '--' separator
+    before_args=("${args[@]:0:$separator_index}")
+
+    # Extract the arguments after the '--' separator
+    after_args=("${args[@]:$separator_index+1}")
+  fi
+
+  PROFILE=${before_args:-$AWS_PROFILE}
+
+  output=$(
+    export "$VALUE=$(aws ssm get-parameter --name "$KEY" --query "Parameter.Value" --output text --profile "$PROFILE" --with-decryption)"
+    eval "${after_args[*]}"
+  )
+
+  echo "$output"
+}
+
+show-colors() {
+    for (( i = 0; i < 256; i++ )); do
+        echo -e "\e[38;5;${i}m ██ Color: ${i}  ······· use: echo -e \"\\\e[38;5;${i}m TEXT\""
+    done
+}
+
+update() {
+  pushd
+  
+  brew upgrade
+  
+  cd $HOME/repos
+  
+  for repo in $(find "$(pwd)" -maxdepth 1 -type d ! -name "$(basename "$(pwd)")"); do 
+    cd $repo
+    updateRepos
+  done
+
+  popd
+}
+
+alias cd='z'
+# check-coralogix() {
+#   kubectl get deployments -o json | 
+#   jq '.items[] | select(.spec.template.spec.initContainers[]? | select(.volumeMounts[]? | .name == "coralogix-java-lib" and .mountPath == "/data")) | {deployment_name: .metadata.name, mount_path: .spec.template.spec.initContainers[].volumeMounts[] | select(.name == "coralogix-java-lib").mountPath}'
+# }
+#
+
+# aider
+alias aider='aider --no-stream --cache-prompts --no-attribute-committer --no-attribute-author --no-attribute-commit-message-author --no-attribute-commit-message-committer --yes-always --no-detect-urls'
+# alias aider='/Users/robertkozak/.local/bin/aider --no-stream --cache-prompts --no-attribute-committer --no-attribute-author --no-attribute-commit-message-author --no-attribute-commit-message-committer --o1-preview --openai-api-key $(cat /Users/robertkozak/keys/openai)'
+alias aider-g='aider --architect --editor-model "gemini/gemini-2.0-flash-exp" --cache-prompts --no-attribute-committer --no-attribute-author --no-attribute-commit-message-author --no-attribute-commit-message-committer --model "gemini/gemini-2.0-flash-thinking-exp"'
+alias aider-a='aider --architect --editor-model sonnet --no-stream --cache-prompts --no-attribute-committer --no-attribute-author --no-attribute-commit-message-author --no-attribute-commit-message-committer --model "gemini/gemini-2.0-flash-exp"'
+

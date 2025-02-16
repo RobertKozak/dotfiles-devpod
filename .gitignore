@@ -1,0 +1,17 @@
+.DS_Store
+*.log
+cache/
+tmp/
+packages/
+buildx/
+*cache/
+*token*
+collections/
+plugins/
+!.config/nvim/lua/plugins
+.aider/
+.aider*
+.env
+containers/
+vllm/
+.docker/

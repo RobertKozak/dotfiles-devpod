@@ -1,0 +1,127 @@
+add_newline = false
+palette = 'default'
+
+format = """
+$cmd_duration\
+$status\
+$hostname\
+$username\
+$directory\n\
+$character
+"""
+
+[cmd_duration]
+disabled = false
+min_time = 5000
+format = '[ $duration ](fg:white bg:green)'
+
+[status]
+success_symbol = '[](fg:white bg:green)[](fg:green bg:white)'
+symbol = '[ $int ](fg:white bg:red)[](fg:red bg:white)'
+#success_symbol = '[](fg:white bg:green)[](fg:green bg:gray)'
+#symbol = '[ $int ](fg:white bg:red)[](fg:red bg:gray)'
+format = '$symbol'
+disabled = false
+
+[hostname]
+ssh_only = false
+#detect_env_vars = ['!TMUX', 'SSH_CONNECTION']
+style = 'fg:black bg:white'
+format = '[ $ssh_symbol$hostname ]($style)[](fg:white bg:transparent)'
+disabled = false
+
+[custom.hostname]
+disabled = false
+command = "echo $(hostname) | cut -d'.' -f1"
+style = 'fg:black bg:white'
+when = true
+format = '[ $output ]($style)[](fg:white bg:green)'
+
+[username]
+disabled = true
+style_user = 'fg:white bg:blue'
+format = '[ $user ]($style)[](fg:blue bg:gray)'
+show_always = true
+
+[python]
+disabled = false
+format = '[ ($version) \($virtualenv\) ](fg:white bg:magenta)[](fg:magenta bg:gray)'
+
+[git_status]
+disabled = false
+ahead = ' \[should push ${count}\]'
+behind = ' \[should pull ${count}\]'
+conflicted = ' \[merge conflicts ${count}\]'
+renamed = ' \[renamed ${count}\]'
+diverged = ' \[diverged ${count}\]'
+deleted = ' \[deleted ${count}\]'
+modified = ' \[modified ${count}\]'
+staged = ' \[staged ${count}\]'
+stashed = ' \[stashed ${count}\]'
+untracked = ' \[untracked ${count}\]'
+typechanged = ' \[changed ${count}\]'
+up_to_date = ''
+# up_to_date = '\[ \u2713\]'
+format = '[$all_status$ahead_behind](fg:white bg:gray)'
+
+[git_branch]
+disabled = false
+always_show_remote = true
+format = '[ $branch ](fg:white bg:gray)[](fg:gray bg:blue)[ $remote_name ](fg:white bg:blue)[](fg:blue bg:white)'
+
+[git_commit]
+disabled = false
+only_detached = true
+format = '[$tag](fg:white bg:gray)[](fg:white bg:blue)[ Detached $hash ](fg:white bg:blue)[](fg:blue bg:white)'
+
+[custom.no-git]
+disabled = false
+format = '[](fg:white bg:gray)[](fg:gray bg:blue)[](fg:white bg:blue)[](fg:blue bg:white)'
+when = '[ ! $(git rev-parse --is-inside-work-tree) ]'
+
+[custom.kubernetes-dev]
+disabled = false
+command = "$HOME/.config/kubernetes-info.sh"
+style = 'fg:black bg:white'
+when = "kubectl config current-context | grep -Ev 'stg|prd'"
+format = '[ $output ]($style)[](fg:white bg:transparent)'
+
+[custom.kubernetes-test]
+disabled = false
+command = "$HOME/.config/kubernetes-info.sh"
+style = 'fg:black bg:yellow'
+when = "kubectl config current-context| grep -E 'stg'"
+format = '[](fg:white bg:yellow)[ $output ]($style)[](fg:yellow bg:transparent)'
+
+[custom.kubernetes-prod]
+disabled = false
+command = "$HOME/.config/kubernetes-info.sh"
+style = 'fg:white bg:red'
+when = 'kubectl config current-context | grep -q prd'
+format = '[](fg:white bg:red)[ $output ]($style)[](fg:red bg:transparent)'
+
+[package]
+disabled = true
+format = '[ ($symbol$version) ](fg:white bg:magenta)[](fg:magenta bg:transparent)'
+
+[directory]
+disabled = false
+truncation_symbol = '…/'
+truncate_to_repo = false
+format = '[ $path](fg:white bg:transparent)'
+
+[character]
+disabled = false
+format = '[» ](fg:bold yellow)'
+
+[palettes.default]
+gray = '#4385BE'
+tansparent = ''
+cyan = "#00a3b7"
+yellow = "#ffda03"
+black = "#000000"
+red = "#ff3c29"
+magenta = "#88658d"
+blue = "#265fe7"
+white = "#dbded8"
+green = "#00a722"
